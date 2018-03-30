@@ -99,8 +99,8 @@ public class Perceptron {
         for (int i = 0; i < numberOfIterations; i++) {
             Collections.shuffle(trainData);
             // Allows finer adjustments of the weights after a certain amount of training.
-            if (i % 10 == 0 && i != 0) {
-                learningRate *= 0.8f;
+            if (i % 8 == 0 && i != 0) {
+                learningRate *= 0.7f;
             }
             for (Sentence s : trainData) {
                 Collections.shuffle(s);
@@ -110,9 +110,9 @@ public class Perceptron {
                     if (t.correctLabelIndex != t.predictedLabelIndex) {
                         weights.update(t.predictedLabelIndex, t.correctLabelIndex, t.features, learningRate);
                     }
+                    weights.incrementCounter();
                 }
             }
-            weights.updateAverage();
         }
         weights.normalizeAverage();
         // If test sentences are given, annotate them.

@@ -9,7 +9,7 @@ package tagger.model;
 public class Weights {
     private float[][] learningWeights;
     private float[][] averageWeights;
-    private int numUpdates = 0;
+    private int numUpdates = 1;
     private final int numFeatures;
     private final int numClasses;
 
@@ -45,11 +45,15 @@ public class Weights {
         // Adjust bias.
         learningWeights[correctLabelIndex][0] += (float) learningRate;
         learningWeights[prediction][0] += (float) -learningRate;
+        averageWeights[correctLabelIndex][0] += (float) learningRate * numUpdates;
+        averageWeights[prediction][0] += (float) -learningRate * numUpdates;
         // Adjust weights for the features.
         for (int target : features) {
             if (target < learningWeights[correctLabelIndex].length - 1) {
                 learningWeights[correctLabelIndex][target + 1] += (float) learningRate;
                 learningWeights[prediction][target + 1] += (float) -learningRate;
+                averageWeights[correctLabelIndex][target + 1] += (float) learningRate * numUpdates;
+                averageWeights[prediction][target + 1] += (float) -learningRate * numUpdates;
             }
         }
     }
@@ -89,24 +93,8 @@ public class Weights {
     /**
      * Updates the averaged weights with the latest weights.
      */
-    public void updateAverage() {
+    public void incrementCounter() {
         this.numUpdates++;
-        for (int i = 0; i < this.numClasses; i++) {
-            for (int j = 0; j < this.numFeatures; j++) {
-                averageWeights[i][j] += learningWeights[i][j];
-            }
-        }
-    }
-
-    /**
-     * Normalized the averaged weights with the number of updates made to them.
-     */
-    public void normalizeAverage() {
-        for (int i = 0; i < this.numClasses; i++) {
-            for (int j = 0; j < this.numFeatures; j++) {
-                averageWeights[i][j] /= numUpdates;
-            }
-        }
     }
 
     /**
@@ -117,12 +105,23 @@ public class Weights {
      * @return The score for the class given the feature vector.
      */
     public float scoreAverage(int classId, int[] featureVector) {
-        float result = averageWeights[classId][0];
+        float result = averageWeights[classId][0] * numUpdates;
         for (int target : featureVector) {
             if (target < averageWeights[classId].length - 1) {
-                result += averageWeights[classId][target + 1];
+                result += averageWeights[classId][target + 1] * numUpdates;
             }
         }
         return result;
+    }
+
+    /**
+     * Normalizes the average weights with the number of updates.
+     */
+    public void normalizeAverage() {
+        for (int i = 0; i < numClasses; i++) {
+            for (int j = 0; j < numFeatures; j++) {
+                averageWeights[i][j] = learningWeights[i][j] - (1.0f / numUpdates) * averageWeights[i][j];
+            }
+        }
     }
 }

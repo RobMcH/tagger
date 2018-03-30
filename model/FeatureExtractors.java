@@ -33,6 +33,7 @@ public class FeatureExtractors {
     private static final HashSet<String> determiners = new HashSet<>(30);
     private static final HashSet<String> adjectives = new HashSet<>(5000);
     private static final HashSet<String> properNouns = new HashSet<>(200);
+    private static final int featureCount = 11;
 
     /**
      * Adds a determiner to the list of known determiners.
@@ -71,7 +72,7 @@ public class FeatureExtractors {
      */
     private static void constructFeatureArray(Token token) {
         // Suffices up to a length of 5, prefixes up to a length of 3, plus 10 features, plus the previous tag
-        int size = Math.min(token.word.length(), 5) + Math.min(token.word.length(), 3) + 10 + 1;
+        int size = Math.min(token.word.length(), 5) + Math.min(token.word.length(), 3) + featureCount;
         token.features = new int[size];
     }
 
