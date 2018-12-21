@@ -323,14 +323,6 @@ public class FeatureExtractors {
             String s;
             while ((s = reader.readLine()) != null) {
                 Token t = new Token();
-                if (!sent.isEmpty()) {
-                    // Set the previous feature of the current token and the next feature of the previous token.
-                    t.previous = sent.get(sent.size() - 1);
-                    sent.get(sent.size() - 1).next = t;
-                } else {
-                    // The token is the beginning of a sentence.
-                    t.previous = null;
-                }
                 String[] strings = s.split(" ");
                 if (strings[strings.length - 1].equals("EOS")) {
                     // The current token is the last in the current sentence.
@@ -370,5 +362,19 @@ public class FeatureExtractors {
             Logger.printException(e);
         }
         return sentences;
+    }
+
+    /**
+     * Sets the previous and next features of a given token contained in a given sentence.
+     */
+    public static void isEOSorBOS(Sentence sentence, Token token) {
+        if (!sentence.isEmpty()) {
+            // Set the previous feature of the current token and the next feature of the previous token.
+            token.previous = sentence.get(sentence.size() - 1);
+            sentence.get(sentence.size() - 1).next = token;
+        } else {
+            // The token is the beginning of a sentence.
+            token.previous = null;
+        }
     }
 }

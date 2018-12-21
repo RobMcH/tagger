@@ -21,6 +21,7 @@ import java.util.List;
  */
 public class Tagger {
     private static final HashSet<String> classCounter = new HashSet<>();
+    private static int previousSentNr;
 
     /**
      * Returns the number of part of speech classes observed.
@@ -56,61 +57,90 @@ public class Tagger {
         try (FileReader fr = new FileReader(inputFile); BufferedReader buff = new BufferedReader(fr)) {
             String line;
             int sentNr = 0;
-            int previousSentNr = 1;
+            previousSentNr = 1;
             boolean notAdded = false;
             Sentence sentence = new Sentence();
             String[] contents;
             while ((line = buff.readLine()) != null) {
                 contents = line.split("\t");
                 if (contents.length > 5 && contents[0].length() > 0) {
-                    if (contents[0].contains("_")) {
-                        sentNr = Integer.parseInt(contents[0].split("_")[0]);
-                    } else {
-                        if (Integer.parseInt(contents[0]) == 1) {
-                            sentNr++;
-                        }
-                    }
-                    Token token = new Token();
-                    token.word = contents[1];
-                    token.label = contents[4];
-                    token.prediction = contents[5];
-                    classCounter.add(token.label);
-                    classCounter.add(token.prediction);
-
-                    // Construct a list of determiners, proper nouns and adjectives as features
-                    if (token.label.equals("DT")) {
-                        FeatureExtractors.addDeterminer(token.word);
-                    } else if (token.label.equals("JJ")) {
-                        FeatureExtractors.addAdjective(token.word);
-                    } else if (token.label.equals("NNP")) {
-                        FeatureExtractors.addProperNoun(token.word);
-                    }
-
-                    if (!sentence.isEmpty()) {
-                        token.previous = sentence.get(sentence.size() - 1);
-                        sentence.get(sentence.size() - 1).next = token;
-                    } else {
-                        token.previous = null;
-                    }
-                    if (previousSentNr == sentNr) {
-                        notAdded = true;
-                        sentence.addToken(token);
-                    } else {
-                        notAdded = false;
-                        sentences.add(sentence);
-                        previousSentNr = sentNr;
-                        sentence = new Sentence();
-                        sentence.add(token);
-                    }
+                    sentNr = getSentNumber(contents, sentNr);
+                    Token token = constructToken(contents);
+                    addTokenPOS(token);
+                    notAdded = processToken(token, sentence, sentNr, sentences);
                 }
             }
             if (notAdded) {
-                sentences.add(sentence);
+                sentences.add(sentence); // If the sentence was not added previously, add it now.
             }
         } catch (IOException e) {
             Logger.printException(e);
         }
         return sentences;
+    }
+
+    /**
+     * Returns the sentence number (sequentially).
+     */
+    private static int getSentNumber(String[] contents, int sentNr) {
+        if (contents[0].contains("_")) {
+            return Integer.parseInt(contents[0].split("_")[0]);
+        } else {
+            if (Integer.parseInt(contents[0]) == 1) {
+                return sentNr + 1;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Constructs a new token for the given input.
+     *
+     * @return The constructed token.
+     */
+    private static Token constructToken(String[] contents) {
+        Token token = new Token();
+        token.word = contents[1];
+        token.label = contents[4];
+        token.prediction = contents[5];
+        classCounter.add(token.label);
+        classCounter.add(token.prediction);
+        return token;
+    }
+
+    /**
+     * Construct a list of determiners, proper nouns and adjectives as features.
+     *
+     * @param token The token whose POS will be added.
+     */
+    private static void addTokenPOS(Token token) {
+        if (token.label.equals("DT")) {
+            FeatureExtractors.addDeterminer(token.word);
+        } else if (token.label.equals("JJ")) {
+            FeatureExtractors.addAdjective(token.word);
+        } else if (token.label.equals("NNP")) {
+            FeatureExtractors.addProperNoun(token.word);
+        }
+    }
+
+    /**
+     * Processes a given token: The previous and next tokens are extracted and the token is added to the sentence.
+     *
+     * @return If the sentence was added to the sentences (meaning the token is EOS).
+     */
+    private static boolean processToken(Token token, Sentence sentence, int sentNr,
+                                        List<Sentence> sentences) {
+        FeatureExtractors.isEOSorBOS(sentence, token);
+        if (previousSentNr == sentNr) {
+            sentence.addToken(token);
+            return true;
+        } else {
+            sentences.add(sentence);
+            previousSentNr = sentNr;
+            sentence = new Sentence();
+            sentence.add(token);
+            return false;
+        }
     }
 
     /**
@@ -129,10 +159,10 @@ public class Tagger {
                     for (int j = Math.max(0, i - 3); j < Math.min(s.size(), i + 4); j++) {
                         Token temp = s.get(j);
                         if (temp.equals(t)) {
-                            Logger.printString(String.format("%-13s\t%-10s\t%-10s\n", "*" + temp.word + "*", temp.label,
+                            Logger.printString(String.format("%-13s\t%-10s\t%-10s%n", "*" + temp.word + "*", temp.label,
                                     temp.prediction));
                         } else {
-                            Logger.printString(String.format("%-15s\t%-10s\t%-10s\n", temp.word, temp.label,
+                            Logger.printString(String.format("%-15s\t%-10s\t%-10s%n", temp.word, temp.label,
                                     temp.prediction));
                         }
                     }
@@ -154,7 +184,7 @@ public class Tagger {
         try (FileWriter fw = new FileWriter(filepath); BufferedWriter buff = new BufferedWriter(fw)) {
             for (Sentence sentence : data) {
                 for (Token token : sentence) {
-                    buff.write(String.format("%s %s %s %s\n", token.word, token.label, token.prediction,
+                    buff.write(String.format("%s %s %s %s%n", token.word, token.label, token.prediction,
                             !token.label.equals(token.prediction) ? "*" : ""));
                 }
             }
@@ -203,7 +233,12 @@ public class Tagger {
         if (args.length > 2 && new File(args[2]).exists()) {
             testData = readData(args[2]);
         }
+        run(trainData, testData, args);
+    }
+
+    private static void run(List<Sentence> trainData, List<Sentence> testData, String... args) {
         Perceptron p = pipeline(trainData, testData);
+        String train = "-train";
         switch (args.length) {
             case 3:
                 if (args[1].equals("-w") && testData == null) {
@@ -213,14 +248,14 @@ public class Tagger {
                 }
                 if (args[1].equals("-p") && testData == null) {
                     // Save predictions
-                    savePredictions(trainData, args[2] + "-train");
+                    savePredictions(trainData, args[2] + train);
                     break;
                 }
                 if (args[1].equals("-t")) {
                     // Fall through
                 }
             case 4:
-                if (trainData != null && testData != null) {
+                if (testData != null) {
                     // Training and test file exist
                     Logger.printString("Confusion matrix of test data:\n");
                     ConfusionMatrix c = new ConfusionMatrix(testData);
@@ -230,10 +265,10 @@ public class Tagger {
                 }
                 break;
             case 5:
-                if (args[3].equals("-p") && !new File(args[4] + "-train").exists() &&
+                if (args[3].equals("-p") && !new File(args[4] + train).exists() &&
                         !new File(args[4] + "-test").exists() && testData != null) {
                     // Save predictions
-                    savePredictions(trainData, args[4] + "-train");
+                    savePredictions(trainData, args[4] + train);
                     savePredictions(testData, args[4] + "-test");
                 }
                 break;
